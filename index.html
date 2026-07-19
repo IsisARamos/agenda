@@ -24,10 +24,14 @@
   --bad:#ff5f7e;
   --warn:#ffb648;
   --r:20px;
+  /* áreas seguras do iPhone (notch / Dynamic Island / barra inferior) */
+  --safe-t:env(safe-area-inset-top,0px);
   --safe-b:env(safe-area-inset-bottom,0px);
+  --safe-l:env(safe-area-inset-left,0px);
+  --safe-r:env(safe-area-inset-right,0px);
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%;background:var(--bg)}
 html,body{margin:0;padding:0;min-height:100%}
 body{
   background:var(--bg);
@@ -54,7 +58,13 @@ body{
   mask-image:radial-gradient(ellipse 90% 70% at 50% 30%,#000 30%,transparent 100%);
   -webkit-mask-image:radial-gradient(ellipse 90% 70% at 50% 30%,#000 30%,transparent 100%);
 }
-.wrap{max-width:1180px;margin:0 auto;padding:18px 16px calc(112px + var(--safe-b));}
+.wrap{
+  max-width:1180px;margin:0 auto;
+  padding-top:calc(18px + var(--safe-t));
+  padding-left:calc(16px + var(--safe-l));
+  padding-right:calc(16px + var(--safe-r));
+  padding-bottom:calc(118px + var(--safe-b));
+}
 /* ---------- header ---------- */
 header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:20px}
 .hi{font-size:13px;color:var(--mut);letter-spacing:.4px}
@@ -102,13 +112,13 @@ header{display:flex;align-items:center;justify-content:space-between;gap:12px;ma
 /* ---------- nav ---------- */
 nav{
   position:fixed;left:50%;transform:translateX(-50%);
-  bottom:calc(14px + var(--safe-b));z-index:50;
+  bottom:calc(12px + var(--safe-b));z-index:50;
   display:flex;gap:4px;padding:6px;
   background:rgba(19,16,35,.94);
   border:1px solid var(--stroke);
   border-radius:22px;
   box-shadow:0 12px 40px rgba(0,0,0,.55);
-  width:calc(100% - 32px);max-width:460px;
+  width:calc(100% - 32px - var(--safe-l) - var(--safe-r));max-width:520px;
 }
 nav button{
   flex:1;border:0;background:transparent;color:var(--mut);
@@ -227,7 +237,7 @@ li.mv{display:flex;align-items:center;gap:11px;background:rgba(0,0,0,.24);border
 .hd.f3{background:linear-gradient(135deg,#a06bff,#22c9c0);color:#fff;box-shadow:0 0 12px rgba(160,107,255,.5)}
 .hd.today{border-color:#fff}
 /* ---------- toast ---------- */
-#toast{position:fixed;left:50%;transform:translateX(-50%) translateY(-24px);top:16px;z-index:99;
+#toast{position:fixed;left:50%;transform:translateX(-50%) translateY(-24px);top:calc(16px + var(--safe-t));z-index:99;
   background:rgba(22,20,38,.94);border:1px solid var(--stroke);color:#fff;
   padding:11px 18px;border-radius:14px;font-size:13.5px;font-weight:600;
   box-shadow:0 10px 34px rgba(0,0,0,.5);
