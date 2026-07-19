@@ -1,0 +1,19 @@
+{
+  "name": "Minha Agenda",
+  "short_name": "Agenda",
+  "description": "Agenda pessoal com tarefas, controle de entradas e saidas e meta mensal do aluguel.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#07060f",
+  "theme_color": "#07060f",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
