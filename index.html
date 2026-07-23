@@ -421,7 +421,8 @@ li.note .nf small{color:var(--mut);font-size:11px;margin-right:auto}
   <section class="view" id="v-goal">
     <div class="grid2">
       <div class="card full">
-        <h2><span class="ic">◎</span> Meta do mês <span id="goalMonth" style="margin-left:auto;color:var(--mut);font-weight:600;text-transform:capitalize"></span></h2>
+        <div class="chips" id="gSel" style="margin-bottom:14px"></div>
+        <h2 style="margin-top:0"><span class="ic">◎</span> <span id="gTitle">Meta</span> <span id="goalMonth" style="margin-left:auto;color:var(--mut);font-weight:600;text-transform:capitalize"></span></h2>
         <div class="ringbox">
           <div class="ring">
             <svg viewBox="0 0 120 120">
@@ -435,21 +436,21 @@ li.note .nf small{color:var(--mut);font-size:11px;margin-right:auto}
             <div class="ctr">
               <b id="gPct">0%</b>
               <small>guardado</small>
-              <em id="gSaved">R$ 0 / R$ 1.300</em>
+              <em id="gSaved">R$ 0 / R$ 0</em>
             </div>
           </div>
         </div>
         <div class="stats">
-          <div class="stat"><b class="neg" id="gLeft">R$ 1.300</b><small>Falta</small></div>
-          <div class="stat"><b id="gDays">—</b><small>Dias restantes</small></div>
-          <div class="stat"><b class="pos" id="gPerDay">R$ 0</b><small>Por dia</small></div>
+          <div class="stat"><b class="neg" id="gLeft">R$ 0</b><small id="gLeftL">Falta</small></div>
+          <div class="stat"><b id="gDays">—</b><small id="gDaysL">Dias restantes</small></div>
+          <div class="stat"><b class="pos" id="gPerDay">R$ 0</b><small id="gPerDayL">Por dia</small></div>
         </div>
         <div class="sep"></div>
         <div class="hint" id="gHint">—</div>
       </div>
 
       <div class="card">
-        <h2><span class="ic">＋</span> Guardar hoje</h2>
+        <h2><span class="ic">＋</span> Guardar nesta meta</h2>
         <div style="display:flex;flex-direction:column;gap:9px">
           <div><label class="lb">Valor (R$)</label><input type="number" inputmode="decimal" step="0.01" id="gVal" placeholder="0,00"></div>
           <div><label class="lb">Data</label><input type="date" id="gDate"></div>
@@ -459,8 +460,18 @@ li.note .nf small{color:var(--mut);font-size:11px;margin-right:auto}
             <button class="btn gh sm" onclick="quick(50)">+50</button>
             <button class="btn gh sm" onclick="quick(100)">+100</button>
           </div>
-          <div class="sep" style="margin:6px 0"></div>
-          <div><label class="lb">Valor do aluguel</label><input type="number" step="1" id="gTarget" value="1300" onchange="setTarget()"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2><span class="ic">⚙</span> Ajustar meta</h2>
+        <div style="display:flex;flex-direction:column;gap:9px">
+          <div><label class="lb">Nome da meta</label><input id="gName" onchange="setGoalMeta()"></div>
+          <div><label class="lb">Valor da meta (R$)</label><input type="number" step="1" id="gTarget" onchange="setGoalMeta()"></div>
+          <div class="row">
+            <button class="btn gh sm" onclick="addNewGoal()">＋ Nova meta</button>
+            <button class="btn red sm" onclick="delGoalItem()">Excluir meta</button>
+          </div>
         </div>
       </div>
 
@@ -472,7 +483,7 @@ li.note .nf small{color:var(--mut);font-size:11px;margin-right:auto}
       </div>
 
       <div class="card full">
-        <h2><span class="ic">≡</span> Depósitos deste mês</h2>
+        <h2><span class="ic">≡</span> <span id="gListTitle">Depósitos</span></h2>
         <ul class="list" id="gList"></ul>
       </div>
     </div>
@@ -532,10 +543,23 @@ li.note .nf small{color:var(--mut);font-size:11px;margin-right:auto}
 <script>
 /* ================= estado ================= */
 const K='agenda_isis_v1';
-const D={tasks:[],notes:[],movs:[],goal:[],target:1300,name:'Isis'};
+const D={tasks:[],notes:[],movs:[],goals:null,activeGoal:null,name:'Isis'};
 let S=load();
 function load(){try{return Object.assign({},D,JSON.parse(localStorage.getItem(K))||{})}catch(e){return Object.assign({},D)}}
 function save(){localStorage.setItem(K,JSON.stringify(S))}
+/* migração: cria metas (aluguel + carro) a partir do formato antigo */
+function migrate(){
+  if(!Array.isArray(S.goals)){
+    const rentDep=(S.goal||[]).map(g=>({id:g.id||uid(),v:g.v,d:g.d}));
+    S.goals=[
+      {id:uid(),name:'Aluguel',emoji:'🏠',mode:'mensal',target:S.target||1300,dep:rentDep},
+      {id:uid(),name:'Meu 1º carro',emoji:'🚗',mode:'total',target:12000,dep:[]}
+    ];
+    delete S.goal;delete S.target;
+  }
+  if(!S.goals.find(g=>g.id===S.activeGoal))S.activeGoal=(S.goals[0]||{}).id;
+  save();
+}
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 
 /* ================= util ================= */
@@ -706,59 +730,103 @@ function renderMovs(){
     <button class="x" onclick="delMov('${m.id}')">×</button></li>`).join('');
 }
 
-/* ================= META ================= */
-function setTarget(){const v=parseFloat(document.getElementById('gTarget').value)||1300;S.target=v;save();renderGoal();toast('Meta atualizada')}
+/* ================= METAS ================= */
+function activeG(){return S.goals.find(g=>g.id===S.activeGoal)||S.goals[0]}
+function gSavedAll(g){return (g.dep||[]).reduce((a,x)=>a+x.v,0)}
+function gMonthDep(g){const pre=today().slice(0,7);return (g.dep||[]).filter(x=>x.d.startsWith(pre))}
+function selGoal(id){S.activeGoal=id;save();renderGoal()}
 function quick(v){document.getElementById('gVal').value=v;addGoal()}
 function addGoal(){
+  const g=activeG();if(!g)return;
   const v=parseFloat(String(document.getElementById('gVal').value).replace(',','.'));
   if(!v||v<=0)return toast('Digite um valor');
-  S.goal.unshift({id:uid(),v:Math.abs(v),d:document.getElementById('gDate').value||today()});
+  g.dep.unshift({id:uid(),v:Math.abs(v),d:document.getElementById('gDate').value||today()});
   document.getElementById('gVal').value='';
   save();renderGoal();renderStats();toast('Guardado! ◎ '+money(v));
 }
-function delGoal(id){S.goal=S.goal.filter(g=>g.id!==id);save();renderGoal();renderStats()}
+function delGoal(id){const g=activeG();g.dep=g.dep.filter(x=>x.id!==id);save();renderGoal();renderStats()}
+function setGoalMeta(){
+  const g=activeG();if(!g)return;
+  g.name=document.getElementById('gName').value.trim()||'Meta';
+  g.target=parseFloat(document.getElementById('gTarget').value)||g.target;
+  save();renderGoal();renderStats();toast('Meta atualizada');
+}
+function addNewGoal(){
+  const name=prompt('Nome da nova meta:','Nova meta');if(name===null)return;
+  const t=parseFloat(String(prompt('Valor da meta (R$):','1000')).replace(',','.'))||1000;
+  const mode=confirm('É uma meta MENSAL, que recomeça todo mês (tipo o aluguel)?\n\nOK = mensal   ·   Cancelar = juntar até o total (tipo o carro)')?'mensal':'total';
+  const ng={id:uid(),name:(name.trim()||'Meta'),emoji:mode==='mensal'?'📅':'🎯',mode,target:t,dep:[]};
+  S.goals.push(ng);S.activeGoal=ng.id;save();renderGoal();renderStats();toast('Meta criada ◎');
+}
+function delGoalItem(){
+  if(S.goals.length<=1)return toast('Deixe pelo menos uma meta');
+  const g=activeG();
+  if(!confirm('Excluir a meta "'+g.name+'" e todos os depósitos dela? Não tem volta.'))return;
+  S.goals=S.goals.filter(x=>x.id!==g.id);S.activeGoal=S.goals[0].id;
+  save();renderGoal();renderStats();toast('Meta excluída');
+}
 function renderGoal(){
-  const n=new Date(),y=n.getFullYear(),mo=n.getMonth(),pre=iso(n).slice(0,7);
-  const mine=S.goal.filter(g=>g.d.startsWith(pre));
-  const saved=mine.reduce((a,g)=>a+g.v,0);
-  const tgt=S.target||1300;
+  if(!S.goals||!S.goals.length)return;
+  const g=activeG();
+  document.getElementById('gSel').innerHTML=S.goals.map(x=>
+    `<button class="chip ${x.id===g.id?'on':''}" onclick="selGoal('${x.id}')">${x.emoji||'◎'} ${esc(x.name)}</button>`).join('');
+  const n=new Date(),y=n.getFullYear(),mo=n.getMonth();
+  const dim=daysInMonth(y,mo),rem=dim-n.getDate()+1;
+  const monthDep=gMonthDep(g),totalSaved=gSavedAll(g),monthSaved=monthDep.reduce((a,x)=>a+x.v,0);
+  const mensal=g.mode==='mensal';
+  const saved=mensal?monthSaved:totalSaved;
+  const tgt=g.target||1;
   const pct=Math.min(100,saved/tgt*100);
-  document.getElementById('goalMonth').textContent=n.toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
+  document.getElementById('gTitle').textContent=g.name;
+  document.getElementById('goalMonth').textContent=mensal?n.toLocaleDateString('pt-BR',{month:'long',year:'numeric'}):'meta total';
   document.getElementById('ringFg').style.strokeDashoffset=326.7*(1-pct/100);
   document.getElementById('gPct').textContent=Math.round(pct)+'%';
   document.getElementById('gSaved').textContent=moneyS(saved)+' / '+moneyS(tgt);
   const left=Math.max(0,tgt-saved);
-  document.getElementById('gLeft').textContent=moneyS(left);
-  const dim=daysInMonth(y,mo),rem=dim-n.getDate()+1;
-  document.getElementById('gDays').textContent=rem;
-  const perDay=left/Math.max(1,rem);
-  document.getElementById('gPerDay').textContent=moneyS(perDay);
-  const ideal=tgt/dim*n.getDate();
+  const b1=document.getElementById('gLeft'),b2=document.getElementById('gDays'),b3=document.getElementById('gPerDay');
+  const l2=document.getElementById('gDaysL'),l3=document.getElementById('gPerDayL');
+  b1.textContent=moneyS(left);
   let h;
-  if(left<=0)h='🎉 <b>Meta batida!</b> Você já juntou o aluguel deste mês. Tudo que guardar agora é lucro.';
-  else if(saved>=ideal)h=`Você está <b>adiantada</b>! No ritmo ideal já seria ${moneyS(ideal)} e você tem ${moneyS(saved)}. Faltam <b>${moneyS(left)}</b> em ${rem} dia(s) — cerca de <b>${moneyS(perDay)}/dia</b>.`;
-  else h=`Faltam <b>${moneyS(left)}</b> em ${rem} dia(s). Guarde <b>${moneyS(perDay)} por dia</b> para fechar o mês. Para estar no ritmo ideal hoje você precisaria de ${moneyS(ideal)}.`;
+  if(mensal){
+    l2.textContent='Dias restantes';l3.textContent='Por dia';
+    b2.textContent=rem;
+    const perDay=left/Math.max(1,rem);b3.textContent=moneyS(perDay);
+    const ideal=tgt/dim*n.getDate();
+    if(left<=0)h='🎉 <b>Meta batida!</b> Você já juntou o '+esc(g.name.toLowerCase())+' deste mês. O que guardar agora é extra.';
+    else if(saved>=ideal)h=`Você está <b>adiantada</b>! Faltam <b>${moneyS(left)}</b> em ${rem} dia(s) — cerca de <b>${moneyS(perDay)}/dia</b>.`;
+    else h=`Faltam <b>${moneyS(left)}</b> em ${rem} dia(s). Guarde <b>${moneyS(perDay)}/dia</b> para fechar o mês.`;
+  }else{
+    l2.textContent='Guardado';l3.textContent='Este mês';
+    b2.textContent=moneyS(totalSaved);b3.textContent=moneyS(monthSaved);
+    if(left<=0)h='🎉 <b>Conquistado!</b> Você já juntou os '+moneyS(tgt)+' do '+esc(g.name.toLowerCase())+'! 🚗';
+    else if(monthSaved>0){const meses=Math.ceil(left/monthSaved);h=`Faltam <b>${moneyS(left)}</b>. No ritmo deste mês (${moneyS(monthSaved)}), você chega em <b>~${meses} ${meses===1?'mês':'meses'}</b>.`;}
+    else h=`Faltam <b>${moneyS(left)}</b> para o ${esc(g.name.toLowerCase())}. Guardando <b>${moneyS(left/12)}/mês</b> você chega em 1 ano.`;
+  }
   document.getElementById('gHint').innerHTML=h;
-  // heat
-  const byDay={};mine.forEach(g=>byDay[g.d]=(byDay[g.d]||0)+g.v);
-  const goalDay=tgt/dim;
+  // heat do mês atual
+  const byDay={};monthDep.forEach(x=>byDay[x.d]=(byDay[x.d]||0)+x.v);
+  const ref=mensal?tgt/dim:Math.max(30,tgt/365);
   let hh='';
   for(let d=1;d<=dim;d++){
-    const key=y+'-'+pad(mo+1)+'-'+pad(d);
-    const v=byDay[key]||0;
-    const c=v<=0?'':v<goalDay*.6?'f1':v<goalDay*1.2?'f2':'f3';
+    const key=y+'-'+pad(mo+1)+'-'+pad(d);const v=byDay[key]||0;
+    const c=v<=0?'':v<ref*.6?'f1':v<ref*1.2?'f2':'f3';
     hh+=`<div class="hd ${c} ${d===n.getDate()?'today':''}" onclick="toast('Dia ${d}: ${money(v)}')">${d}</div>`;
   }
   document.getElementById('heat').innerHTML=hh;
+  // campos ajustar
+  document.getElementById('gName').value=g.name;
+  document.getElementById('gTarget').value=g.target;
   // lista
+  document.getElementById('gListTitle').textContent=mensal?'Depósitos deste mês':'Todos os depósitos';
+  const list=mensal?monthDep:g.dep;
   const ul=document.getElementById('gList');
-  if(!mine.length){ul.innerHTML='<div class="empty"><div>◎</div>Nenhum depósito este mês.<br>Comece com qualquer valor.</div>'}
+  if(!list.length){ul.innerHTML='<div class="empty"><div>◎</div>Nenhum depósito ainda.<br>Comece com qualquer valor.</div>'}
   else{
-    ul.innerHTML=[...mine].sort((a,b)=>b.d.localeCompare(a.d)).map(g=>`<li class="mv">
-      <div class="dot in">◎</div>
-      <div class="mi"><p>Guardado para o aluguel</p><small>${brDate(g.d)}</small></div>
-      <div class="val pos">+${money(g.v).replace('R$ ','')}</div>
-      <button class="x" onclick="delGoal('${g.id}')">×</button></li>`).join('');
+    ul.innerHTML=[...list].sort((a,b)=>b.d.localeCompare(a.d)).map(x=>`<li class="mv">
+      <div class="dot in">${g.emoji||'◎'}</div>
+      <div class="mi"><p>Guardado — ${esc(g.name)}</p><small>${brDate(x.d)}</small></div>
+      <div class="val pos">+${money(x.v).replace('R$ ','')}</div>
+      <button class="x" onclick="delGoal('${x.id}')">×</button></li>`).join('');
   }
 }
 
@@ -768,7 +836,7 @@ function renderStats(){
   document.getElementById('sT').textContent=S.tasks.length;
   document.getElementById('sN').textContent=S.notes.length;
   document.getElementById('sM').textContent=S.movs.length;
-  document.getElementById('sG').textContent=moneyS(S.goal.reduce((a,g)=>a+g.v,0));
+  document.getElementById('sG').textContent=moneyS((S.goals||[]).reduce((a,g)=>a+gSavedAll(g),0));
 }
 function exportData(){
   const b=new Blob([JSON.stringify(S,null,2)],{type:'application/json'});
@@ -793,9 +861,9 @@ function wipe(){
 
 /* ================= boot ================= */
 function boot(){
+  migrate();
   const t=today();
   ['tDate','fDate','gDate'].forEach(id=>{const e=document.getElementById(id);if(!e.value)e.value=t});
-  document.getElementById('gTarget').value=S.target||1300;
   document.getElementById('sName').value=S.name||'';
   document.getElementById('uname').textContent=S.name||'você';
   tick();renderTasks();renderNotes();renderFin();renderGoal();renderStats();
