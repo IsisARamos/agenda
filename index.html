@@ -723,7 +723,7 @@ function renderMovs(){
   l.sort((a,b)=>b.d.localeCompare(a.d));
   const ul=document.getElementById('fList');
   if(!l.length){ul.innerHTML='<div class="empty"><div>◇</div>Nenhum lançamento neste período.</div>';return}
-  ul.innerHTML=l.slice(0,120).map(m=>`<li class="mv">
+  ul.innerHTML=l.slice(0,600).map(m=>`<li class="mv">
     <div class="dot ${m.k}">${m.k==='in'?'↑':'↓'}</div>
     <div class="mi"><p>${esc(m.desc)}</p><small>${brDate(m.d)} · ${esc(m.cat||'')}</small></div>
     <div class="val ${m.k==='in'?'pos':'neg'}">${m.k==='in'?'+':'−'}${money(m.v).replace('R$ ','')}</div>
