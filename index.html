@@ -368,10 +368,11 @@ li.note .nf small{color:var(--mut);font-size:11px;margin-right:auto}
           <small>Saldo de hoje</small>
           <b id="fToday">R$ 0,00</b>
         </div>
-        <div class="stats">
+        <div class="stats" style="grid-template-columns:repeat(auto-fit,minmax(84px,1fr))">
           <div class="stat"><b class="pos" id="fIn">R$ 0</b><small>Entradas hoje</small></div>
           <div class="stat"><b class="neg" id="fOut">R$ 0</b><small>Saídas hoje</small></div>
           <div class="stat"><b id="fMonth">R$ 0</b><small>Saldo do mês</small></div>
+          <div class="stat"><b id="fTotal">R$ 0</b><small>Saldo total</small></div>
         </div>
       </div>
 
@@ -402,6 +403,28 @@ li.note .nf small{color:var(--mut);font-size:11px;margin-right:auto}
         <div class="bars" id="bars"></div>
         <div class="sep"></div>
         <div class="mini" id="weekSum">—</div>
+      </div>
+
+      <div class="card full">
+        <h2><span class="ic">▦</span> Saldo por período</h2>
+        <div class="row" style="align-items:flex-end">
+          <div><label class="lb">De</label><input type="date" id="pDe" onchange="renderPeriod()"></div>
+          <div><label class="lb">Até</label><input type="date" id="pAte" onchange="renderPeriod()"></div>
+        </div>
+        <div class="chips" id="pQuick" style="margin:11px 0 4px">
+          <button class="chip" data-q="mes">Este mês</button>
+          <button class="chip" data-q="ant">Mês passado</button>
+          <button class="chip" data-q="30">Últimos 30 dias</button>
+          <button class="chip on" data-q="tudo">Tudo</button>
+        </div>
+        <div class="stats" style="grid-template-columns:repeat(3,1fr);margin-top:8px">
+          <div class="stat"><b class="pos" id="pIn">R$ 0</b><small>Entradas</small></div>
+          <div class="stat"><b class="neg" id="pOut">R$ 0</b><small>Saídas</small></div>
+          <div class="stat"><b id="pSaldo">R$ 0</b><small>Saldo do período</small></div>
+        </div>
+        <div class="sep"></div>
+        <div class="mini" id="pDaysTitle" style="margin-bottom:8px">Saldo de cada dia</div>
+        <ul class="list" id="pList"></ul>
       </div>
 
       <div class="card full">
@@ -702,6 +725,8 @@ function renderFin(){
   const pre=t.slice(0,7);
   const mb=S.movs.filter(m=>m.d.startsWith(pre)).reduce((a,m)=>a+(m.k==='in'?m.v:-m.v),0);
   const mEl=document.getElementById('fMonth');mEl.textContent=moneyS(mb);mEl.className=mb>=0?'pos':'neg';
+  const tot=S.movs.reduce((a,m)=>a+(m.k==='in'?m.v:-m.v),0);
+  const tEl=document.getElementById('fTotal');tEl.textContent=moneyS(tot);tEl.className=tot>=0?'pos':'neg';
   // gráfico
   const days=[];for(let i=6;i>=0;i--){const d=new Date();d.setDate(d.getDate()-i);days.push(d)}
   const vals=days.map(d=>sumDay(iso(d)));
@@ -713,7 +738,44 @@ function renderFin(){
       <small>${d.toLocaleDateString('pt-BR',{weekday:'short'}).slice(0,3)}</small></div>`}).join('');
   const wk=vals.reduce((a,b)=>a+b,0);
   document.getElementById('weekSum').innerHTML=`Total dos 7 dias: <b style="color:${wk>=0?'var(--ok)':'var(--bad)'}">${money(wk)}</b> · média ${money(wk/7)}/dia`;
-  renderMovs();
+  renderMovs();renderPeriod();
+}
+/* ---- saldo por período ---- */
+document.querySelectorAll('#pQuick .chip').forEach(c=>c.onclick=()=>{
+  const q=c.dataset.q,n=new Date();let de,ate=today();
+  if(q==='mes'){de=iso(new Date(n.getFullYear(),n.getMonth(),1))}
+  else if(q==='ant'){de=iso(new Date(n.getFullYear(),n.getMonth()-1,1));ate=iso(new Date(n.getFullYear(),n.getMonth(),0))}
+  else if(q==='30'){const d=new Date();d.setDate(d.getDate()-29);de=iso(d)}
+  else{const ds=S.movs.map(m=>m.d).sort();de=ds[0]||today()}
+  document.getElementById('pDe').value=de;document.getElementById('pAte').value=ate;
+  document.querySelectorAll('#pQuick .chip').forEach(x=>x.classList.remove('on'));c.classList.add('on');
+  renderPeriod();
+});
+function renderPeriod(){
+  let de=document.getElementById('pDe').value, ate=document.getElementById('pAte').value;
+  if(!de){const ds=S.movs.map(m=>m.d).sort();de=ds[0]||today();document.getElementById('pDe').value=de}
+  if(!ate){ate=today();document.getElementById('pAte').value=ate}
+  if(de>ate){const t=de;de=ate;ate=t}
+  const l=S.movs.filter(m=>m.d>=de&&m.d<=ate);
+  const din=l.filter(m=>m.k==='in').reduce((a,m)=>a+m.v,0);
+  const dout=l.filter(m=>m.k==='out').reduce((a,m)=>a+m.v,0);
+  const sal=din-dout;
+  document.getElementById('pIn').textContent=moneyS(din);
+  document.getElementById('pOut').textContent=moneyS(dout);
+  const ps=document.getElementById('pSaldo');ps.textContent=moneyS(sal);ps.className=sal>=0?'pos':'neg';
+  // por dia
+  const byDay={};l.forEach(m=>{(byDay[m.d]=byDay[m.d]||{i:0,o:0})[m.k==='in'?'i':'o']+=m.v});
+  const dias=Object.keys(byDay).sort((a,b)=>b.localeCompare(a));
+  document.getElementById('pDaysTitle').textContent='Saldo de cada dia ('+dias.length+' dia(s))';
+  const ul=document.getElementById('pList');
+  if(!dias.length){ul.innerHTML='<div class="empty"><div>◇</div>Nenhum lançamento nesse período.</div>';return}
+  ul.innerHTML=dias.slice(0,370).map(d=>{
+    const x=byDay[d],s=x.i-x.o;
+    return `<li class="mv">
+      <div class="dot ${s>=0?'in':'out'}">${s>=0?'↑':'↓'}</div>
+      <div class="mi"><p>${new Date(d+'T12:00').toLocaleDateString('pt-BR',{weekday:'short',day:'2-digit',month:'2-digit'})}</p>
+        <small>+${moneyS(x.i)} · −${moneyS(x.o)}</small></div>
+      <div class="val ${s>=0?'pos':'neg'}">${money(s).replace('R$ ','')}</div></li>`}).join('');
 }
 function renderMovs(){
   const t=today();let l=[...S.movs];
